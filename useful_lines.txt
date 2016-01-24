@@ -1,0 +1,3 @@
+
+SPARK
+val perms = textFile.map(line => line.split("\t")).flatMap(y=>y.head.split(" ").flatMap(z=>y.last.split(" ").map(a=>(a+"_"+z,1)))).countByKey()

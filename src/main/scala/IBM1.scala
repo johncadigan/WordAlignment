@@ -19,16 +19,19 @@ class IBM1 (sour : Array[Array[String]], tar : Array[Array[String]]){
       val text_target = tar;
       val hash = Int.MaxValue
       var processed = 0
+      val null_value = "NULL#@!"
       var trans = Map[Tuple2[Int,Int], Double]().withDefaultValue(0.0)
       var counts = Map[Tuple2[Int,Int], Double]().withDefaultValue(0.0)
       //var combos = Set[Tuple2[String,String]]()
       //var source_vocab = Set[String]()
       //var target_vocab = Set[String]()
       val r = (0 to text_source.size-1)
-      val text_combos = text_source.zip(text_target).par.flatMap(x=>x._1.flatMap(y=>x._2.map(z=>(y,z)))).seq.toSet
+      val text_combos = text_source.zip(text_target).par.flatMap(x=>x._1.flatMap(y=>(x._2:+null_value).map(z=>(y,z)))).seq.toSet
       val source_array = text_combos.map(x=>x._1).toSet.toArray
       val source_map = source_array.zipWithIndex.toMap
+      
       val target_array = text_combos.map(x=>x._2).toSet.toArray
+      
       val target_map = target_array.zipWithIndex.toMap
       val int_combos = text_combos.map(x=>(source_map(x._1),target_map(x._2)))
       
@@ -92,35 +95,46 @@ class IBM1 (sour : Array[Array[String]], tar : Array[Array[String]]){
           }
         
       }
-      // for dual alignment
-      /*def get_prob(s:String, t:String): Double = {
-          
-          if(s == "NULL#$@" || !trans.contains(source_map(s),target_map(t))) return 1.0;
-          else {
-            return trans(source_map(s),target_map(t))
-          }
-             
-      }*/
-      
-      def alignments(f: String){
-          val mw = new BufferedWriter(new FileWriter(new File(f)))
-          val r = (0 to source.size-1)
-          for(i <- r){
+
+            
+      def sentence_alignments(i:Int): Map[Tuple2[Int,Int],Int] ={
              val source_sentence = source(i)
              val target_sentence = target(i)
              var s = ""
+             var pairs = Map[Tuple2[Int,Int],Int]().withDefaultValue(0)
              for(x<- 0 to source_sentence.size-1){
                 val al = (0 to target_sentence.size-1).map(y=>(trans(source_sentence(x),target_sentence(y)),x,y)  ).maxBy(x=>x._1)
-                if(target_array(target_sentence(al._3))!="NULL#$@"){
-                  mw.write("%s-%s ".format(al._2, al._3))
+                if(target_array(target_sentence(al._3))!=null_value){
+                  pairs((al._2, al._3))+=1
                 }
              }
+             return pairs
+       }
+      
+       def dual_alignments(f:String, other:IBM1){
+          val mw = new BufferedWriter(new FileWriter(new File(f)))
+          val r = (0 to source.size-1)
+          for(i <- r){
+             val other_pairs = other.sentence_alignments(i)
+             val pairs = sentence_alignments(i).map(x=>(x._1, x._2+other_pairs(x._1._2,x._1._1))) //add in opposite order
+             
+             pairs.keys.toArray.sortWith(_._1 < _._1).foreach(x=>
+               {if(pairs(x) == 2)mw.write(" %s-%s".format(x._1,x._2))
+               //else mw.write(" %s-%s".format(x._1,x._2))
+               })
              mw.write("\n")
           }
           mw.close()
+        
       }
       
-      /*def dual_alignments(f:String, other:IBM1){
+      
+      
+      
+      
+      
+      
+      def alignments(f:String){
           val mw = new BufferedWriter(new FileWriter(new File(f)))
           val r = (0 to source.size-1)
           for(i <- r){
@@ -129,26 +143,17 @@ class IBM1 (sour : Array[Array[String]], tar : Array[Array[String]]){
              var s = ""
              var pairs = Map[Tuple2[Int,Int],Int]().withDefaultValue(0)
              for(x<- 0 to source_sentence.size-1){
-                val sword = source_array(x)
-                val st_al = (0 to target_sentence.size-1).map(y=>(trans(source_sentence(x),target_sentence(y)),x,y)).maxBy(x=>x._1)
-                val ts_al = (0 to source_sentence.size-1).map(y=>(other.get_prob(target_array(y), sword), y,x)).maxBy(x=>x._1)
-                
-                if(target_array(target_sentence(st_al._3))!="NULL#$@"){
-                  pairs(st_al._2, st_al._3)+=1
-                }
-                if(other.target_array(target_sentence(ts_al._3))!="NULL#$@"){
-                  pairs(ts_al._2, ts_al._3)+=1
+                val al = (0 to target_sentence.size-1).map(y=>(trans(source_sentence(x),target_sentence(y)),x,y)  ).maxBy(x=>x._1)
+                if(target_array(target_sentence(al._3))!=null_value){
+                  mw.write("%s-%s ".format(al._2, al._3))
                 }
              }
-             pairs.keys.toArray.sortWith(_._1 < _._1).foreach(x=>
-               {if(pairs(x) == 2)mw.write(" %s-%s ".format(x._1,x._2))
-               else mw.write(" %s?%s ".format(x._1,x._2))
-               })
              mw.write("\n")
           }
           mw.close()
-        
-      }*/
+      }
+      
+     
       
       
       
@@ -164,13 +169,15 @@ object run_ibm extends App{
     val fs = Source.fromFile(args(0))
     val ft = Source.fromFile(args(1))
     val source = fs.getLines().map(x=>x.stripLineEnd.split("\\s+")).toArray
-    val target = ft.getLines().map(x=>x.stripLineEnd.split("\\s+"):+"NULL#$@").toArray
+    val target = ft.getLines().map(x=>x.stripLineEnd.split("\\s+")).toArray
     fs.close();
     ft.close();
     println("read files")
-    val i = new IBM1(source, target)
-    i.train(args(2).toInt)
-    i.alignments(args(3))
+    val sourceT = new IBM1(source, target)
+    sourceT.train(args(2).toInt)
+    val targetS = new IBM1(target, source)
+    targetS.train(args(2).toInt)
+    sourceT.dual_alignments(args(3), targetS)
     val end = System.currentTimeMillis()
     println("Total running time: %s seconds".format((end-start)/1000))
   }

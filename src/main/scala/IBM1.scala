@@ -1,4 +1,7 @@
 package main.scala
+import org.apache.spark.SparkContext
+import org.apache.spark.SparkContext._
+import org.apache.spark.SparkConf
 import scala.collection.mutable.{Map => Map}
 import scala.collection.immutable.{Map => IMap}
 import scala.collection.mutable.Stack

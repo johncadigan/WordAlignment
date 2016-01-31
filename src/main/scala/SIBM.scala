@@ -133,12 +133,33 @@ object IBM1 {
     val cutoff = hash*width
     for(it <- 1 to args(2).toInt){    
        
-        var expectation = combined.flatMap(i=>helper(i, probs)) 
-        val counts = expectation.reduceByKey(_+_).collect().toMap
-        var parts = counts.par.partition(x=>x._1< cutoff)
-        
+        var expectation = combined.flatMap(pair=>{
+            //imperative style
+          val sSize = pair._1.size
+          val tSize = pair._2.size
+          var res = Array.fill(sSize*tSize * 2)((0.toLong,0.0))
+          var index = 0;
+          var deltas = MMap[Long, Double]().withDefaultValue(0.0)
+          for(j <-0 to tSize-1){
+               var delta = 0.0
+            for(i <-0 to sSize-1){
+               delta += probs(getIndex(pair._1(i),pair._2(j)))
+            }
+            for(i <-0 to sSize-1){
+                val ef = getIndex(pair._1(i),pair._2(j))
+                val f =  getIndex(pair._1(i),hash)
+                val pef = probs(ef)/delta
+                res(index) = (ef, pef)
+                res(index+1) = (f, pef)
+                index+=2
+            }
+          }
+          res;
+           
+        }).reduceByKey(_+_).collect().toMap 
+        var parts = expectation.par.partition(x=>x._1< cutoff)
         probs = MMap(parts._1.map(x =>(x._1,x._2/parts._2(x._1%width+cutoff ))).seq.toSeq:_*)
-        sysw.write("Calculated probs %s %s\n".format(it, System.currentTimeMillis())) 
+         
     }
     alignments(args(3), combined.toArray,probs)
         

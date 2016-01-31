@@ -163,7 +163,7 @@ class IBM1 (sour : Array[Array[String]], tar : Array[Array[String]]){
 }
 
 
-object run_ibm extends App{
+object run_dual extends App{
   
   override def main(args: Array[String]){
     
@@ -181,6 +181,30 @@ object run_ibm extends App{
     val targetS = new IBM1(target, source)
     targetS.train(args(2).toInt)
     sourceT.dual_alignments(args(3), targetS)
+    val end = System.currentTimeMillis()
+    println("Total running time: %s seconds".format((end-start)/1000))
+  }
+  
+}
+
+object run_single extends App{
+  
+  override def main(args: Array[String]){
+    
+    val start = System.currentTimeMillis()
+    
+    val fs = Source.fromFile(args(0))
+    val ft = Source.fromFile(args(1))
+    val source = fs.getLines().map(x=>x.stripLineEnd.split("\\s+")).toArray
+    val target = ft.getLines().map(x=>x.stripLineEnd.split("\\s+")).toArray
+    fs.close();
+    ft.close();
+    println("read files")
+    val sourceT = new IBM1(source, target)
+    sourceT.train(args(2).toInt)
+    //val targetS = new IBM1(target, source)
+    //targetS.train(args(2).toInt)
+    sourceT.alignments(args(3))
     val end = System.currentTimeMillis()
     println("Total running time: %s seconds".format((end-start)/1000))
   }

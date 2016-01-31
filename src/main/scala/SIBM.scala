@@ -103,7 +103,7 @@ object IBM1 {
     val source_map = source_words.zipWithIndex.toMap
     
     width = source_map.size
-    val w = width
+    val w = sc.broadcast(width)
     
     /*Target*/
     //val target_words = (target.flatMap(x=>x.filter(y=>y!=null_value)).toSet.toArray.sorted:+null_value)
@@ -111,7 +111,7 @@ object IBM1 {
     val target_map = target_words.zipWithIndex.toMap
     
     hash = target_map.size
-    val h = hash
+    val h = sc.broadcast(hash)
     val source_sents = source.map(x=>x.map(y=>source_map(y)))  
     val target_sents = target.map(x=>x.map(y=>target_map(y)))
     
@@ -134,11 +134,11 @@ object IBM1 {
           for(j <-0 to tSize-1){
                var delta = 0.0
             for(i <-0 to sSize-1){
-               delta += prob(pair._2(j)*width+pair._1(i))
+               delta += prob(pair._2(j)*w.value+pair._1(i))
             }
             for(i <-0 to sSize-1){
-                val ef = pair._2(j)*width+pair._1(i)
-                val f =  width*hash+pair._1(i)%width
+                val ef = pair._2(j)*w.value+pair._1(i)
+                val f =  w.value*h.value+pair._1(i)%w.value
                 val pef = prob(ef)/delta
                 res(index) = (ef, pef)
                 res(index+1) = (f, pef)

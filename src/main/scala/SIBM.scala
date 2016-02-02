@@ -162,7 +162,7 @@ object IBM1 {
         */        
         
         var expectation = combined.flatMap(pair=>helper(pair,probs)).reduceByKey(_+_).collect().toMap
-        var margin = expectation.par.groupBy(x=>x._1%width).map(y=>(y._1, y._2.map(z=>z._2).reduce(_+_)))
+        var margin = expectation.par.groupBy(x=>x._1%width).map(y=>(y._1%width+cutoff, y._2.map(z=>z._2).reduce(_+_)))
         expectation.map(x =>(x._1,x._2/margin(x._1%width+cutoff))).foreach(i=>probs(i._1)=i._2)
     }
     alignments(args(3), combined.toArray,probs)

@@ -118,7 +118,7 @@ object IBM1 {
     val combos =  source_sents.zip(target_sents).par.flatMap(x=>x._1.flatMap(y=>(x._2).map(z=>(y,z)))).seq.toSet.toArray     
 
     val possible_translations = combos.groupBy(x=>x._1).map(x=>(x._1, x._2.size.toDouble)) //target
-    val combined = sc.parallelize(source_sents.zip(target_sents))
+    val combined = sc.parallelize(source_sents.zip(target_sents)).cache()
     //val probs = Array.ofDim[Double](source_map.size*(target_map.size+1))
     var probs = HashMap[Int,Double]()
     combos.foreach(x=>probs(x._1+x._2*width)=1.0/possible_translations(x._1))

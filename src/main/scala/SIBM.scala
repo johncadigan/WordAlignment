@@ -12,18 +12,18 @@ import java.io.FileReader
 import scala.collection.mutable.{Map => MMap}
 import scala.collection.mutable.MutableList
 import scala.collection.mutable.HashMap
-
+//import org.apache.spark.mllib.linalg.{SparseVector}
 
 object IBM1 {
   var hash = 0;
   var width = 0
   
   
-  def getIndex(Is: Int, It:Int): Long = {
+  def getIndex(Is: Int, It:Int): Int = {
       It*width + Is
   }
   
-  def getIndex(T: Tuple2[Int,Int]): Long = {
+  def getIndex(T: Tuple2[Int,Int]): Int = {
       T._2*width + T._1
   }
   
@@ -53,7 +53,7 @@ object IBM1 {
   }
   
   
-  def alignments(f:String, combined : Array[Tuple2[Array[Int], Array[Int]]],  prob: Array[Double]){
+  def alignments(f:String, combined : Array[Tuple2[Array[Int], Array[Int]]],  prob: HashMap[Int,Double]){
           val mw = new BufferedWriter(new FileWriter(new File(f)))
           
           for(i <- combined){
@@ -72,7 +72,7 @@ object IBM1 {
           mw.close()
       }
   
-  def sentence_alignments(source : Array[Int], target: Array[Int], probs : MMap[Long,Double]): MMap[Tuple2[Int,Int],Int] ={
+  def sentence_alignments(source : Array[Int], target: Array[Int], probs : MMap[Int,Double]): MMap[Tuple2[Int,Int],Int] ={
              var s = ""
              var pairs = MMap[Tuple2[Int,Int],Int]().withDefaultValue(0)
              for(x<- 0 to source.size-1){
@@ -119,16 +119,19 @@ object IBM1 {
 
     val possible_translations = combos.groupBy(x=>x._1).map(x=>(x._1, x._2.size.toDouble)) //target
     val combined = sc.parallelize(source_sents.zip(target_sents))
-    val probs = Array.ofDim[Double](source_map.size*(target_map.size+1))
+    //val probs = Array.ofDim[Double](source_map.size*(target_map.size+1))
+    var probs = HashMap[Int,Double]()
     combos.foreach(x=>probs(x._1+x._2*width)=1.0/possible_translations(x._1))
+    //val probs = new SparseVector(source_map.size*(target_map.size+1), combos.map(x=>x._1+x._2*width)++(source_map.size*target_map.size to source_map.size*(target_map.size+1) ), combos.map(x=>1.0/possible_translations(x._1))++Array.ofDim[Double](width) )
+    
     val cutoff = hash*width
     
     //function with a closure
-    def helper(pair: Tuple2[Array[Int],Array[Int]], prob: Array[Double]): Array[Tuple2[Int,Double]] = {
+    def helper(pair: Tuple2[Array[Int],Array[Int]], prob: HashMap[Int,Double]): Array[Tuple2[Int,Double]] = {
           
           val sSize = pair._1.size
           val tSize = pair._2.size
-          var res = Array.fill(sSize*tSize * 2)((0,0.0))
+          var res = Array.fill(sSize*tSize /** 2*/)((0,0.0))
           var index = 0;
           var deltas = MMap[Int, Double]().withDefaultValue(0.0)
           for(j <-0 to tSize-1){
@@ -141,22 +144,26 @@ object IBM1 {
                 val f =  w.value*h.value+pair._1(i)%w.value
                 val pef = prob(ef)/delta
                 res(index) = (ef, pef)
-                res(index+1) = (f, pef)
-                index+=2
+                //res(index+1) = (f, pef)
+                index+=1 //2
             }
           }
           return res;
     }
     
     
-    
-    
     for(it <- 1 to args(2).toInt){    
        
+        /* works
         //var expectation = combined.flatMap(i=>helper(i, probs)).reduceByKey(_+_).collect().toMap
         var expectation = combined.flatMap(pair=>helper(pair,probs)).reduceByKey(_+_).collect().toMap
         var parts = expectation.par.partition(x=>x._1< hash*width)
         parts._1.map(x =>(x._1,x._2/parts._2(x._1%width+cutoff))).foreach(i=>probs(i._1)=i._2)
+        */        
+        
+        var expectation = combined.flatMap(pair=>helper(pair,probs)).reduceByKey(_+_).collect().toMap
+        var margin = expectation.par.groupBy(x=>x._1%width).map(y=>(y._1, y._2.map(z=>z._2).reduce(_+_)))
+        expectation.map(x =>(x._1,x._2/margin(x._1%width+cutoff))).foreach(i=>probs(i._1)=i._2)
     }
     alignments(args(3), combined.toArray,probs)
         
